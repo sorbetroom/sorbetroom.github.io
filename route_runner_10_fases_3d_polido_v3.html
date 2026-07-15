@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Route Runner — sorbet Puzzle experience</title>
+<style>
+:root{
+  --bg:#eef2f6; --panel:#ffffff; --ink:#202124; --muted:#6f7680;
+  --blue:#4285f4; --red:#ea4335; --yellow:#fbbc04; --green:#34a853;
+  --track:#2f343c; --cell:#f8fafc; --stroke:#dce2e8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:var(--bg);font-family:Inter,Arial,sans-serif;color:var(--ink)}
+button{font:inherit}
+#app{position:fixed;inset:0}
+#editor{position:absolute;inset:0;display:flex;flex-direction:column;transition:opacity .55s ease,transform .75s cubic-bezier(.2,.8,.2,1),filter .55s ease}
+#editor.hidden{opacity:0;transform:perspective(1200px) rotateX(12deg) scale(.92) translateY(-2vh);filter:blur(3px);pointer-events:none}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px 10px}
+.brand{display:flex;align-items:center;gap:12px}.brandText{display:flex;flex-direction:column;line-height:1.05}.brandText strong{font-size:19px;font-weight:900}.brandText small{margin-top:5px;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.logo{display:grid;grid-template-columns:repeat(2,10px);gap:3px;transform:rotate(45deg)}
+.logo i{width:10px;height:10px;border-radius:3px}
+.stage{font-size:12px;color:var(--muted);letter-spacing:.1em}
+main{flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(560px,780px) 300px;gap:20px;padding:10px 24px 24px;align-items:center;justify-content:center;overflow:hidden}
+.panel{background:rgba(255,255,255,.94);border:1px solid rgba(32,33,36,.08);border-radius:24px;padding:18px;box-shadow:0 18px 55px rgba(60,64,67,.12);min-height:0;max-height:calc(100vh - 110px);overflow:hidden;display:flex;flex-direction:column}
+.panel h2{margin:0 0 8px;font-size:12px;letter-spacing:.12em;color:var(--muted)}
+.panel p{margin:0;color:#4d5156;font-size:13px;line-height:1.5}
+#tray{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 4px 6px 2px;align-content:start;scrollbar-width:thin}
+.pieceCard{position:relative;aspect-ratio:1;border:2px solid transparent;border-radius:18px;background:#f7f9fb;cursor:pointer;transition:.16s;box-shadow:inset 0 0 0 1px var(--stroke);min-width:0}
+.pieceCard:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(60,64,67,.12)}
+.pieceCard.selected{border-color:var(--blue);background:#edf4ff;box-shadow:0 0 0 4px rgba(66,133,244,.14)}
+.pieceCard.placed{opacity:.24;cursor:default}
+.pieceIndex{position:absolute;left:10px;top:8px;font-size:10px;font-weight:800;color:var(--muted)}
+#pieceTools{display:flex;gap:8px;margin-top:12px;flex:none}
+.tool{flex:1;border:0;border-radius:999px;padding:10px 12px;font-weight:800;cursor:pointer}
+#rotate{background:#eef3ff;color:#2b64c7}
+#clearSelection{background:#f1f3f4;color:#4d5156}
+#boardShell{padding:18px;border-radius:32px;background:linear-gradient(145deg,#dfe4ea,#f5f7fa);box-shadow:0 28px 70px rgba(60,64,67,.16);border:1px solid rgba(255,255,255,.75);max-width:100%;max-height:calc(100vh - 120px);overflow:hidden;display:flex;align-items:center;justify-content:center}
+#board{display:grid;grid-template-columns:repeat(6,minmax(52px,1fr));gap:10px;transform-origin:center center;transition:transform .2s ease}
+.cell{position:relative;aspect-ratio:1;border-radius:20px;background:var(--cell);border:1px solid var(--stroke);transition:.14s;overflow:hidden}
+.cell:hover{background:#f0f5fb}
+.cell.available{box-shadow:inset 0 0 0 3px rgba(66,133,244,.16)}
+.cell.dropTarget{background:#e8f0fe;transform:scale(.97);box-shadow:inset 0 0 0 3px var(--blue)}
+.cell.blocked{background:repeating-linear-gradient(135deg,#d7dce2 0 10px,#e6e9ed 10px 20px)}
+.cell.blocked:after{content:"";position:absolute;inset:18%;border:2px dashed rgba(80,86,94,.25);border-radius:12px}
+.fixed{position:absolute;inset:0;display:grid;place-items:center;color:white;font-size:11px;font-weight:900;letter-spacing:.08em}
+.fixed.start{background:var(--blue)} .fixed.goal{background:var(--green)}
+.fixed:before{content:"";position:absolute;left:50%;top:50%;width:58%;height:16%;background:var(--track);transform:translateY(-50%);border-radius:999px}
+.fixed.goal:before{left:auto;right:50%}
+.cellPiece{position:absolute;inset:6px;border:0;border-radius:16px;background:#fff;box-shadow:0 5px 14px rgba(60,64,67,.12);cursor:pointer}
+.cellPiece.selected{outline:3px solid var(--blue)}
+.track{position:absolute;inset:0}
+.track:before,.track:after{content:"";position:absolute;background:var(--track);border-radius:999px}
+.track.straight.h:before{left:7%;right:7%;top:41%;height:18%}
+.track.straight.v:before{top:7%;bottom:7%;left:41%;width:18%}
+.track.corner.ne:before{left:41%;right:7%;top:41%;height:18%}
+.track.corner.ne:after{left:41%;top:7%;bottom:41%;width:18%}
+.track.corner.es:before{left:41%;right:7%;top:41%;height:18%}
+.track.corner.es:after{left:41%;top:41%;bottom:7%;width:18%}
+.track.corner.sw:before{left:7%;right:41%;top:41%;height:18%}
+.track.corner.sw:after{left:41%;top:41%;bottom:7%;width:18%}
+.track.corner.wn:before{left:7%;right:41%;top:41%;height:18%}
+.track.corner.wn:after{left:41%;top:7%;bottom:41%;width:18%}
+.track.corner:global{}
+.track.corner span{position:absolute;left:41%;top:41%;width:18%;height:18%;background:var(--track);border-radius:50%}
+#message{margin-top:14px;padding:13px;border-radius:14px;background:#f1f3f4;color:#5f6368;font-size:12px;line-height:1.45;min-height:58px}
+#actions{display:grid;gap:10px;margin-top:14px}
+.action{border:0;border-radius:999px;padding:13px 16px;font-weight:900;cursor:pointer}
+#run{background:var(--ink);color:#fff}
+#solution{background:#e8f0fe;color:#2b64c7}
+#run:disabled{opacity:.35;cursor:not-allowed}
+#reset{background:#eef1f4;color:var(--ink)}
+#legend{display:grid;gap:9px;margin-top:14px;font-size:11px;color:var(--muted)}
+.legendRow{display:flex;align-items:center;gap:9px}
+.swatch{width:12px;height:12px;border-radius:4px}
+#three{position:absolute;inset:0;opacity:0;pointer-events:none;transition:opacity .25s ease;background:linear-gradient(#f7f9fc,#edf1f5)}
+#three.active{opacity:1;pointer-events:auto}
+#transitionFlash{position:absolute;inset:0;pointer-events:none;opacity:0;background:radial-gradient(circle at 50% 48%,rgba(255,255,255,.9),rgba(255,255,255,0) 55%);transition:opacity .45s ease;z-index:4}
+#transitionFlash.show{opacity:1}
+#threeUI{position:absolute;inset:0;display:none;pointer-events:none}
+#threeUI.active{display:block}
+#threeTop{position:absolute;left:24px;right:24px;top:20px;display:flex;justify-content:space-between}
+.badge{background:rgba(255,255,255,.92);border:1px solid rgba(32,33,36,.08);border-radius:999px;padding:10px 15px;font-weight:800;font-size:12px;box-shadow:0 10px 30px rgba(60,64,67,.14)}
+#threeBottom{position:absolute;left:50%;bottom:24px;transform:translateX(-50%);display:flex;gap:10px;pointer-events:auto}
+#back,#replay,#nextStage{border:0;border-radius:999px;padding:13px 19px;font-weight:900;cursor:pointer}
+#back{background:#fff;color:var(--ink)} #replay{background:var(--ink);color:#fff} #nextStage{background:#34a853;color:#fff;display:none}
+#success{position:absolute;left:50%;top:18%;transform:translate(-50%,-10px);padding:13px 20px;border-radius:999px;background:#fff;font-weight:900;box-shadow:0 14px 40px rgba(60,64,67,.18);opacity:0;transition:.3s}
+#success.show{opacity:1;transform:translate(-50%,0)}
+
+
+.panelHeading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.panelHeading h2{margin:0}
+#pieceCounter,#routeState{font-size:10px;font-weight:900;letter-spacing:.08em;padding:6px 9px;border-radius:999px;background:#f1f3f4;color:var(--muted);white-space:nowrap}
+#routeState.ready{background:#e6f4ea;color:#188038}
+#routeState.error{background:#fce8e6;color:#c5221f}
+#selectionHint{margin-top:12px;padding:9px 11px;border-radius:12px;background:#f7f9fb;border:1px solid var(--stroke);font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none}
+#selectionHint.active{background:#e8f0fe;border-color:#c8dafc;color:#2b64c7}
+.stageTotal{color:#9aa0a6;font-weight:700;margin-left:2px}
+#message{display:flex;align-items:center}
+#message.ready{background:#e6f4ea;color:#137333}
+#message.error{background:#fce8e6;color:#b3261e}
+#message.info{background:#f1f3f4;color:#5f6368}
+.pieceCard.placed:after{content:"✓";position:absolute;right:8px;top:7px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:#34a853;color:white;font-size:11px;font-weight:900}
+.pieceCard.placed{opacity:.48}
+.cellPiece{transition:transform .14s ease,box-shadow .14s ease}
+.cellPiece:hover{transform:scale(.98);box-shadow:0 7px 17px rgba(60,64,67,.17)}
+.action{transition:transform .14s ease,box-shadow .14s ease,opacity .14s ease}
+.action:hover:not(:disabled){transform:translateY(-1px)}
+#run:not(:disabled){box-shadow:0 8px 20px rgba(32,33,36,.2)}
+
+@media(max-height:820px){
+  header{padding-top:12px}
+  main{padding-top:4px;padding-bottom:14px}
+  .panel{padding:14px;max-height:calc(100vh - 82px)}
+  .panel p{font-size:12px;line-height:1.35}
+  #tray{gap:8px;margin-top:10px}
+  .pieceCard{border-radius:15px}
+  .pieceIndex{left:8px;top:6px;font-size:9px}
+  #pieceTools{margin-top:8px}
+  .tool{padding:8px 10px;font-size:12px}
+}
+@media(max-height:680px){
+  .panel h2{margin-bottom:5px}
+  .panel p{font-size:11px}
+  #tray{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  #pieceTools{gap:6px}
+}
+
+@media(max-width:1180px){
+  main{grid-template-columns:240px minmax(500px,680px) 240px}
+  #board{grid-template-columns:repeat(6,minmax(66px,1fr))}
+}
+@media(max-width:920px){
+  html,body{overflow:auto}
+  #editor{position:relative;min-height:100vh}
+  main{grid-template-columns:1fr;overflow:visible}
+  #boardShell{order:1;width:min(96vw,720px)}
+  .panel{width:min(96vw,720px)}
+  #tray{grid-template-columns:repeat(6,minmax(52px,1fr));overflow-x:auto;overflow-y:hidden}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="three"></div><div id="transitionFlash"></div>
+
+  <section id="editor">
+    <header>
+      <div class="brand">
+        <span class="logo">
+          <i style="background:#4285f4"></i><i style="background:#ea4335"></i>
+          <i style="background:#fbbc04"></i><i style="background:#34a853"></i>
+        </span>
+        <span class="brandText">
+          <strong>Route Runner</strong>
+          <small>Puzzle experience by sorbet</small>
+        </span>
+      </div>
+      <div class="stage">FASE <span id="stageNumber">01</span><span class="stageTotal">/10</span> · <span id="difficultyLabel">INICIANTE</span></div>
+    </header>
+
+    <main>
+      <aside class="panel">
+        <div class="panelHeading"><h2>PEÇAS</h2><span id="pieceCounter">0/0</span></div>
+        <p>Clique numa peça e depois numa casa vazia. Arraste para mover. Dois cliques rápidos giram a peça quantas vezes quiser.</p>
+        <div id="selectionHint">Nenhuma peça selecionada</div><div id="tray"></div>
+        <div id="pieceTools">
+          <button class="tool" id="rotate">GIRAR ↻</button>
+          <button class="tool" id="clearSelection">CANCELAR</button>
+        </div>
+      </aside>
+
+      <div id="boardShell"><div id="board"></div></div>
+
+      <aside class="panel">
+        <div class="panelHeading"><h2>OBJETIVO</h2><span id="routeState">MONTANDO</span></div>
+        <p>Conecte o início azul à chegada verde usando todas as peças disponíveis.</p>
+        <div id="message"></div>
+        <div id="actions">
+          <button class="action" id="run" disabled>GO</button>
+          <button class="action" id="solution">VER SOLUÇÃO</button>
+          <button class="action" id="reset">REINICIAR</button>
+        </div>
+        <div id="legend">
+          <div class="legendRow"><i class="swatch" style="background:#4285f4"></i> Início</div>
+          <div class="legendRow"><i class="swatch" style="background:#34a853"></i> Chegada</div>
+          <div class="legendRow"><i class="swatch" style="background:#d7dce2"></i> Casa bloqueada</div>
+        </div>
+      </aside>
+    </main>
+  </section>
+
+  <div id="threeUI">
+    <div id="threeTop"><div class="badge">SIMULAÇÃO 3D</div><div class="badge" id="runStatus">Testando rota…</div></div>
+    <div id="success">ROTA CONCLUÍDA!</div>
+    <div id="threeBottom"><button id="back">VOLTAR</button><button id="replay">REPETIR</button><button id="nextStage">PRÓXIMA FASE</button></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script>
+let COLS=6,ROWS=5;
+let START={x:0,y:3,dir:'E'},GOAL={x:5,y:1,dir:'W'};
+let BLOCKED=new Set();
+const DIRS={N:{dx:0,dy:-1,opp:'S'},E:{dx:1,dy:0,opp:'W'},S:{dx:0,dy:1,opp:'N'},W:{dx:-1,dy:0,opp:'E'}};
+const ROT={N:'E',E:'S',S:'W',W:'N'};
+
+const STAGES=[
+{"difficulty":"INICIANTE","cols":6,"rows":5,"start":{"x":0,"y":3,"dir":"E"},"goal":{"x":5,"y":1,"dir":"W"},"blocked":["1,1","3,2","4,3","1,4"],"pieces":["straight","straight","straight","straight","corner","corner"],"solution":[[0,3],[1,3],[2,3],[2,2],[2,1],[3,1],[4,1],[5,1]]},
+{"difficulty":"FÁCIL","cols":6,"rows":5,"start":{"x":0,"y":1,"dir":"E"},"goal":{"x":5,"y":4,"dir":"W"},"blocked":["0,0","3,0","5,0","0,3","3,3"],"pieces":["straight","straight","straight","straight","straight","corner","corner","corner","corner"],"solution":[[0,1],[1,1],[2,1],[3,1],[4,1],[5,1],[5,2],[5,3],[4,3],[4,4],[5,4]]},
+{"difficulty":"INTERMEDIÁRIA","cols":7,"rows":5,"start":{"x":0,"y":4,"dir":"E"},"goal":{"x":6,"y":0,"dir":"W"},"blocked":["1,0","3,0","1,2","4,3","6,3","3,4"],"pieces":["straight","straight","straight","straight","straight","corner","corner","corner","corner"],"solution":[[0,4],[1,4],[2,4],[2,3],[2,2],[2,1],[3,1],[4,1],[5,1],[5,0],[6,0]]},
+{"difficulty":"DIFÍCIL","cols":7,"rows":6,"start":{"x":0,"y":2,"dir":"E"},"goal":{"x":6,"y":5,"dir":"W"},"blocked":["2,0","4,0","5,1","5,2","1,4","5,4"],"pieces":["straight","straight","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,2],[1,2],[1,3],[2,3],[2,4],[2,5],[3,5],[3,4],[4,4],[4,5],[5,5],[6,5]]},
+{"difficulty":"AVANÇADA","cols":8,"rows":6,"start":{"x":0,"y":5,"dir":"E"},"goal":{"x":7,"y":1,"dir":"W"},"blocked":["1,0","3,0","5,0","6,2","1,2","6,3","1,3","6,4"],"pieces":["straight","straight","straight","straight","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,5],[1,5],[2,5],[3,5],[4,5],[4,4],[5,4],[5,3],[4,3],[4,2],[5,2],[5,1],[6,1],[7,1]]},
+{"difficulty":"MESTRE I","cols":8,"rows":7,"start":{"x":0,"y":3,"dir":"E"},"goal":{"x":7,"y":3,"dir":"W"},"blocked":["0,0","2,0","4,0","6,0","5,1","7,2","6,4","1,5","3,5","5,5","0,6","7,6"],"pieces":["straight","straight","straight","straight","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,3],[1,3],[1,2],[0,2],[0,1],[1,1],[2,1],[2,2],[3,2],[4,2],[4,3],[5,3],[6,3],[7,3]]},
+{"difficulty":"MESTRE II","cols":8,"rows":7,"start":{"x":0,"y":3,"dir":"E"},"goal":{"x":7,"y":1,"dir":"W"},"blocked":["0,0","2,0","4,0","6,0","0,2","3,2","7,2","1,4","6,4","0,6","4,6","7,6"],"pieces":["straight","straight","corner","corner","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,3],[1,3],[2,3],[2,4],[2,5],[3,5],[3,4],[4,4],[4,3],[5,3],[5,2],[6,2],[6,1],[7,1]]},
+{"difficulty":"EXPERT","cols":8,"rows":7,"start":{"x":0,"y":3,"dir":"E"},"goal":{"x":7,"y":5,"dir":"W"},"blocked":["0,0","2,0","4,0","6,0","0,2","3,1","5,1","7,1","0,4","7,4","1,6","5,6"],"pieces":["corner","corner","corner","corner","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,3],[1,3],[1,4],[2,4],[2,5],[3,5],[3,4],[4,4],[4,5],[5,5],[5,4],[6,4],[6,5],[7,5]]},
+{"difficulty":"EXPERT +","cols":8,"rows":7,"start":{"x":0,"y":3,"dir":"E"},"goal":{"x":7,"y":3,"dir":"W"},"blocked":["0,0","1,0","3,0","5,0","7,0","0,2","7,2","2,5","4,5","6,5","0,6","7,5"],"pieces":["straight","straight","corner","corner","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,3],[1,3],[2,3],[2,2],[3,2],[3,3],[4,3],[4,2],[5,2],[5,3],[5,4],[6,4],[6,3],[7,3]]},
+{"difficulty":"FINAL","cols":8,"rows":7,"start":{"x":0,"y":3,"dir":"E"},"goal":{"x":7,"y":5,"dir":"W"},"blocked":["0,0","2,0","4,0","6,0","0,2","3,2","5,2","7,2","0,5","4,6","6,6","7,6"],"pieces":["corner","corner","corner","corner","corner","corner","corner","corner","corner","corner","corner","corner"],"solution":[[0,3],[1,3],[1,4],[2,4],[2,5],[3,5],[3,4],[4,4],[4,5],[5,5],[5,4],[6,4],[6,5],[7,5]]}
+];
+
+let currentStage=0;
+let pieces=[];
+let selectedId=null,dragId=null;
+
+
+function fitBoardToViewport(){
+  requestAnimationFrame(()=>{
+    const shell=document.getElementById('boardShell');
+    const boardEl=document.getElementById('board');
+    if(!shell||!boardEl)return;
+
+    boardEl.style.transform='scale(1)';
+    const shellRect=shell.getBoundingClientRect();
+    const boardRect=boardEl.getBoundingClientRect();
+
+    const availableW=Math.max(100,shellRect.width-8);
+    const availableH=Math.max(100,window.innerHeight-145);
+
+    const scale=Math.min(
+      1,
+      availableW/boardRect.width,
+      availableH/boardRect.height
+    );
+
+    boardEl.style.transform=`scale(${Math.max(.68,scale)})`;
+  });
+}
+
+function loadStage(index){
+  currentStage=index;
+  const s=STAGES[index];
+  COLS=s.cols; ROWS=s.rows;
+  START={...s.start}; GOAL={...s.goal};
+  BLOCKED=new Set(s.blocked);
+  pieces=s.pieces.map((type,i)=>({id:i+1,type,rot:0,pos:null}));
+  selectedId=null;
+  pieceClickState.clear();
+  document.getElementById('stageNumber').textContent=String(index+1).padStart(2,'0');
+  document.getElementById('difficultyLabel').textContent=s.difficulty;
+  board.style.gridTemplateColumns=`repeat(${COLS},minmax(66px,1fr))`;
+
+  const stageErrors=validateStageConfiguration(s);
+  if(stageErrors.length){
+    console.error(`Erros na fase ${index+1}:`,stageErrors);
+  }
+
+  render();
+  fitBoardToViewport();
+}
+const tray=document.getElementById('tray'),board=document.getElementById('board'),msg=document.getElementById('message'),runBtn=document.getElementById('run');
+
+
+const pieceClickState=new Map();
+
+function handlePieceClick(piece,event,allowPlaced=true){
+  if(event){
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
+  const now=performance.now();
+  const previous=pieceClickState.get(piece.id)||0;
+  const isDouble=now-previous<=360;
+
+  if(isDouble){
+    pieceClickState.set(piece.id,0);
+    selectedId=piece.id;
+    piece.rot=(piece.rot+1)%4;
+    render();
+    return;
+  }
+
+  pieceClickState.set(piece.id,now);
+  selectedId=piece.id;
+  render();
+}
+
+function connectors(p){let a=p.type==='straight'?['E','W']:['N','E'];for(let i=0;i<p.rot;i++)a=a.map(d=>ROT[d]);return a}
+function trackClass(p){
+  const c=connectors(p).slice().sort().join('');
+  if(p.type==='straight')return c.includes('E')?'straight h':'straight v';
+  return c==='EN'?'corner ne':c==='ES'?'corner es':c==='SW'?'corner sw':'corner wn';
+}
+function selectPiece(id){selectedId=id;render()}
+function placePiece(id,x,y){
+  const p=pieces.find(q=>q.id===id); if(!p||!canUseCell(x,y))return;
+  const occ=pieces.find(q=>q.pos&&q.pos.x===x&&q.pos.y===y);
+  if(occ&&occ.id!==id)occ.pos=null;
+  p.pos={x,y}; selectedId=id; render();
+}
+function makeTrayPiece(p){
+  const b=document.createElement('button');b.className='pieceCard'+(selectedId===p.id?' selected':'')+(p.pos?' placed':'');
+  b.draggable=!p.pos;b.dataset.id=p.id;
+  b.innerHTML=`<span class="pieceIndex">PEÇA ${p.id}</span><span class="track ${trackClass(p)}">${p.type==='corner'?'<span></span>':''}</span>`;
+  b.onclick=e=>{if(!p.pos)handlePieceClick(p,e,false)};
+  b.addEventListener('dragstart',e=>{if(p.pos)return;e.dataTransfer.setData('text/plain',p.id);dragId=p.id});
+  return b;
+}
+function makeBoardPiece(p){
+  const b=document.createElement('button');b.className='cellPiece'+(selectedId===p.id?' selected':'');
+  b.innerHTML=`<span class="track ${trackClass(p)}">${p.type==='corner'?'<span></span>':''}</span>`;
+  b.onclick=e=>handlePieceClick(p,e,true);
+  b.draggable=true;b.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',p.id);dragId=p.id});
+  return b;
+}
+function canUseCell(x,y){
+  return !BLOCKED.has(`${x},${y}`)&&!(x===START.x&&y===START.y)&&!(x===GOAL.x&&y===GOAL.y)
+}
+function render(){
+  tray.innerHTML='';pieces.forEach(p=>tray.appendChild(makeTrayPiece(p)));
+  board.innerHTML='';
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const c=document.createElement('div');c.className='cell';c.dataset.x=x;c.dataset.y=y;
+    if(BLOCKED.has(`${x},${y}`))c.classList.add('blocked');
+    if(selectedId&&canUseCell(x,y))c.classList.add('available');
+    if(x===START.x&&y===START.y)c.innerHTML='<div class="fixed start">INÍCIO</div>';
+    else if(x===GOAL.x&&y===GOAL.y)c.innerHTML='<div class="fixed goal">CHEGADA</div>';
+    else{
+      const p=pieces.find(q=>q.pos&&q.pos.x===x&&q.pos.y===y);
+      if(p)c.appendChild(makeBoardPiece(p));
+    }
+    c.onclick=()=>{if(selectedId&&canUseCell(x,y))placePiece(selectedId,x,y)};
+    c.addEventListener('dragover',e=>{if(canUseCell(x,y)){e.preventDefault();c.classList.add('dropTarget')}});
+    c.addEventListener('dragleave',()=>c.classList.remove('dropTarget'));
+    c.addEventListener('drop',e=>{e.preventDefault();c.classList.remove('dropTarget');const id=+(e.dataTransfer.getData('text/plain')||dragId);placePiece(id,x,y)});
+    board.appendChild(c);
+  }
+  const v=validate();
+  const placed=pieces.filter(p=>p.pos).length;
+  const selected=pieces.find(p=>p.id===selectedId);
+
+  runBtn.disabled=!v.ok;
+  msg.textContent=v.message;
+  msg.className=v.ok?'ready':(placed===pieces.length?'error':'info');
+
+  document.getElementById('pieceCounter').textContent=`${placed}/${pieces.length}`;
+  const routeState=document.getElementById('routeState');
+  routeState.textContent=v.ok?'PRONTA':(placed===pieces.length?'REVISAR':'MONTANDO');
+  routeState.className=v.ok?'ready':(placed===pieces.length?'error':'');
+
+  const selectionHint=document.getElementById('selectionHint');
+  if(selected){
+    selectionHint.textContent=`Peça ${selected.id} selecionada · ${selected.type==='straight'?'reta':'curva'}`;
+    selectionHint.className='active';
+  }else{
+    selectionHint.textContent='Nenhuma peça selecionada';
+    selectionHint.className='';
+  }
+}
+function tileAt(x,y){
+  if(x===START.x&&y===START.y)return{con:['E']};
+  if(x===GOAL.x&&y===GOAL.y)return{con:['W']};
+  const p=pieces.find(q=>q.pos&&q.pos.x===x&&q.pos.y===y);return p?{con:connectors(p)}:null;
+}
+function validate(){
+  const placed=pieces.filter(p=>p.pos).length;
+  if(placed<pieces.length)return{ok:false,message:`Faltam ${pieces.length-placed} peça(s). Selecione uma peça e clique numa casa livre.`};
+  let x=START.x,y=START.y,out=START.dir;const used=new Set(),path=[{x,y}];
+  for(let i=0;i<50;i++){
+    const d=DIRS[out];x+=d.dx;y+=d.dy;path.push({x,y});
+    if(x<0||x>=COLS||y<0||y>=ROWS)return{ok:false,message:'A rota sai do tabuleiro.'};
+    if(x===GOAL.x&&y===GOAL.y){
+      const all=pieces.every(p=>used.has(`${p.pos.x},${p.pos.y}`));
+      return all?{ok:true,message:'Rota pronta. Pressione GO para testar o percurso.',path}:{ok:false,message:'A rota chega ao destino, mas ainda existem peças fora do caminho.'};
+    }
+    const key=`${x},${y}`;if(used.has(key))return{ok:false,message:'A rota formou um ciclo.'};used.add(key);
+    const t=tileAt(x,y);if(!t)return{ok:false,message:'Existe uma casa vazia no caminho.'};
+    const incoming=d.opp;if(!t.con.includes(incoming))return{ok:false,message:'Há uma conexão interrompida. Gire ou reposicione uma das peças.'};
+    out=t.con.find(q=>q!==incoming);if(!out)return{ok:false,message:'A rota termina antes da chegada.'};
+  }
+  return{ok:false,message:'A rota não pôde ser validada.'}
+}
+
+function rotationFor(type,incoming,outgoing){
+  for(let rot=0;rot<4;rot++){
+    const probe={type,rot};
+    const c=connectors(probe);
+    if(c.includes(incoming)&&c.includes(outgoing))return rot;
+  }
+  return 0;
+}
+
+
+
+function validateStageConfiguration(stage){
+  const blocked=new Set(stage.blocked||[]);
+  const errors=[];
+  const path=stage.solution||[];
+
+  const startKey=`${stage.start.x},${stage.start.y}`;
+  const goalKey=`${stage.goal.x},${stage.goal.y}`;
+
+  if(blocked.has(startKey))errors.push('início bloqueado');
+  if(blocked.has(goalKey))errors.push('chegada bloqueada');
+  if(!path.length)return ['fase sem solução oficial'];
+
+  if(path[0][0]!==stage.start.x||path[0][1]!==stage.start.y)errors.push('solução não começa no início');
+  const last=path[path.length-1];
+  if(last[0]!==stage.goal.x||last[1]!==stage.goal.y)errors.push('solução não termina na chegada');
+  if(path.length-2!==stage.pieces.length)errors.push('quantidade de peças diferente da rota');
+
+  const visited=new Set();
+  const directions=[];
+  let requiredStraight=0;
+  let requiredCorner=0;
+
+  path.forEach((point,index)=>{
+    const [x,y]=point;
+    const key=`${x},${y}`;
+
+    if(x<0||x>=stage.cols||y<0||y>=stage.rows)errors.push(`ponto fora do tabuleiro: ${key}`);
+    if(index>0&&index<path.length-1&&blocked.has(key))errors.push(`solução atravessa bloqueio: ${key}`);
+    if(visited.has(key))errors.push(`rota repete casa: ${key}`);
+    visited.add(key);
+
+    if(index>0){
+      const previous=path[index-1];
+      const dx=x-previous[0],dy=y-previous[1];
+      if(Math.abs(dx)+Math.abs(dy)!==1)errors.push(`salto inválido na rota: ${key}`);
+      else directions.push(dx===1?'E':dx===-1?'W':dy===1?'S':'N');
+    }
+  });
+
+  for(let i=1;i<path.length-1;i++){
+    if(directions[i-1]===directions[i])requiredStraight++;
+    else requiredCorner++;
+  }
+
+  const availableStraight=stage.pieces.filter(p=>p==='straight').length;
+  const availableCorner=stage.pieces.filter(p=>p==='corner').length;
+  if(requiredStraight!==availableStraight)errors.push(`retas necessárias: ${requiredStraight}; disponíveis: ${availableStraight}`);
+  if(requiredCorner!==availableCorner)errors.push(`curvas necessárias: ${requiredCorner}; disponíveis: ${availableCorner}`);
+
+  return errors;
+}
+
+function predefinedSolution(){
+  const stage=STAGES[currentStage];
+  if(!stage.solution)return null;
+
+  const errors=validateStageConfiguration(stage);
+  if(errors.length){
+    console.error(`Fase ${currentStage+1} inválida:`,errors);
+    return null;
+  }
+
+  const path=stage.solution;
+  const result=[];
+
+  function dirBetween(a,b){
+    const dx=b[0]-a[0],dy=b[1]-a[1];
+    if(dx===1&&dy===0)return 'E';
+    if(dx===-1&&dy===0)return 'W';
+    if(dx===0&&dy===1)return 'S';
+    if(dx===0&&dy===-1)return 'N';
+    return null;
+  }
+
+  for(let i=1;i<path.length-1;i++){
+    const incoming=DIRS[dirBetween(path[i-1],path[i])].opp;
+    const outgoing=dirBetween(path[i],path[i+1]);
+    const type=incoming===DIRS[outgoing].opp?'straight':'corner';
+    result.push({
+      x:path[i][0],
+      y:path[i][1],
+      type,
+      rot:rotationFor(type,incoming,outgoing)
+    });
+  }
+  return result;
+}
+
+function findSolution(){
+  const fixed=predefinedSolution();
+  if(fixed)return fixed;
+
+  const straightCount=pieces.filter(p=>p.type==='straight').length;
+  const cornerCount=pieces.filter(p=>p.type==='corner').length;
+  const visited=new Set([`${START.x},${START.y}`]);
+  const placements=[];
+
+  function dfs(x,y,outDir,straightLeft,cornerLeft){
+    const step=DIRS[outDir];
+    const nx=x+step.dx, ny=y+step.dy;
+    if(nx<0||nx>=COLS||ny<0||ny>=ROWS)return false;
+    if(BLOCKED.has(`${nx},${ny}`))return false;
+
+    if(nx===GOAL.x&&ny===GOAL.y){
+      return straightLeft===0&&cornerLeft===0&&DIRS[outDir].opp===GOAL.dir;
+    }
+
+    const key=`${nx},${ny}`;
+    if(visited.has(key))return false;
+    if((nx===START.x&&ny===START.y)||(nx===GOAL.x&&ny===GOAL.y))return false;
+
+    const incoming=DIRS[outDir].opp;
+    const options=[];
+
+    if(straightLeft>0){
+      options.push({type:'straight',out:outDir});
+    }
+
+    if(cornerLeft>0){
+      const left={N:'W',W:'S',S:'E',E:'N'}[outDir];
+      const right={N:'E',E:'S',S:'W',W:'N'}[outDir];
+      options.push({type:'corner',out:left},{type:'corner',out:right});
+    }
+
+    // Prefer moves that get closer to the goal.
+    options.sort((a,b)=>{
+      const da=Math.abs(nx+DIRS[a.out].dx-GOAL.x)+Math.abs(ny+DIRS[a.out].dy-GOAL.y);
+      const db=Math.abs(nx+DIRS[b.out].dx-GOAL.x)+Math.abs(ny+DIRS[b.out].dy-GOAL.y);
+      return da-db;
+    });
+
+    for(const opt of options){
+      const nnx=nx+DIRS[opt.out].dx, nny=ny+DIRS[opt.out].dy;
+      if(nnx<0||nnx>=COLS||nny<0||nny>=ROWS)continue;
+      if(BLOCKED.has(`${nnx},${nny}`))continue;
+
+      visited.add(key);
+      placements.push({
+        x:nx,y:ny,type:opt.type,
+        rot:rotationFor(opt.type,incoming,opt.out)
+      });
+
+      const ok=dfs(
+        nx,ny,opt.out,
+        straightLeft-(opt.type==='straight'?1:0),
+        cornerLeft-(opt.type==='corner'?1:0)
+      );
+      if(ok)return true;
+
+      placements.pop();
+      visited.delete(key);
+    }
+    return false;
+  }
+
+  return dfs(START.x,START.y,START.dir,straightCount,cornerCount) ? placements.slice() : null;
+}
+
+function showSolution(){
+  const solution=findSolution();
+  if(!solution){
+    msg.textContent='Não foi possível encontrar uma solução automática para esta fase.';
+    return;
+  }
+
+  const straightPieces=pieces.filter(p=>p.type==='straight');
+  const cornerPieces=pieces.filter(p=>p.type==='corner');
+  let si=0,ci=0;
+
+  pieces.forEach(p=>{p.pos=null;p.rot=0});
+  const unsafe=solution.some(step=>!canUseCell(step.x,step.y));
+  if(unsafe){
+    pieces.forEach(p=>{p.pos=null;p.rot=0});
+    selectedId=null;
+    render();
+    msg.textContent='A solução desta fase entrou em conflito com uma casa bloqueada. A fase foi protegida contra posicionamentos inválidos.';
+    return;
+  }
+
+  solution.forEach(step=>{
+    const p=step.type==='straight'?straightPieces[si++]:cornerPieces[ci++];
+    if(!p)return;
+    p.pos={x:step.x,y:step.y};
+    p.rot=step.rot;
+  });
+  selectedId=null;
+  render();
+  msg.textContent='Solução exibida. Você ainda pode mover ou girar as peças antes de pressionar GO.';
+  msg.className='ready';
+}
+
+document.getElementById('rotate').onclick=()=>{const p=pieces.find(q=>q.id===selectedId);if(p){p.rot=(p.rot+1)%4;render()}};
+document.getElementById('clearSelection').onclick=()=>{selectedId=null;render()};
+document.getElementById('solution').onclick=showSolution;
+document.getElementById('reset').onclick=()=>loadStage(currentStage);
+
+/* THREE */
+const mount=document.getElementById('three');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0xf4f6f8);
+scene.fog=new THREE.FogExp2(0xe8edf3,.022);
+
+const camera=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,.1,120);
+camera.position.set(0,12,0.01);
+camera.lookAt(0,0,0);
+
+const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.08;
+mount.appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0xb7c0cc,1.15));
+const key=new THREE.DirectionalLight(0xffffff,1.7);
+key.position.set(7,12,9);
+key.castShadow=true;
+key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.left=-14;key.shadow.camera.right=14;key.shadow.camera.top=14;key.shadow.camera.bottom=-14;
+scene.add(key);
+
+const fill=new THREE.DirectionalLight(0x9fc2ff,.55);
+fill.position.set(-7,5,4);
+scene.add(fill);
+
+const rim=new THREE.DirectionalLight(0xffd2a3,.45);
+rim.position.set(0,4,-8);
+scene.add(rim);
+
+const world=new THREE.Group();
+scene.add(world);
+
+let ball=null,curve=null,motionCurve=null,runT=0,running=false,confetti=[],arrivalCompleted=false,motionLength=1,motionDuration=1,motionSamples=[],motionDistances=[];
+let transitionActive=false,transitionT=0;
+let transitionStartCam=new THREE.Vector3();
+let transitionEndCam=new THREE.Vector3();
+let transitionStartTarget=new THREE.Vector3();
+let transitionEndTarget=new THREE.Vector3();
+let currentLookTarget=new THREE.Vector3();
+let smoothTangent=new THREE.Vector3(0,0,1);
+let smoothBallPosition=new THREE.Vector3();
+
+function mat(c,r=.5,m=0){
+  return new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+}
+function clearWorld(){
+  while(world.children.length)world.remove(world.children[0]);
+  confetti=[];
+}
+function p3(x,y){
+  return new THREE.Vector3((x-(COLS-1)/2)*1.45,.45,(y-(ROWS-1)/2)*1.45);
+}
+function smoothstep01(t){
+  t=Math.max(0,Math.min(1,t));
+  return t*t*(3-2*t);
+}
+function smootherstep01(t){
+  t=Math.max(0,Math.min(1,t));
+  return t*t*t*(t*(t*6-15)+10);
+}
+function easeInOutCubic(t){
+  return t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+}
+function makeRoundedTile(color){
+  const g=new THREE.BoxGeometry(1.28,.18,1.28,2,1,2);
+  const mtl=mat(color,.7,0);
+  const mesh=new THREE.Mesh(g,mtl);
+  mesh.castShadow=true;mesh.receiveShadow=true;
+  return mesh;
+}
+
+function buildMotionSamples(curvePath){
+  const count=Math.max(240,Math.ceil(curvePath.getLength()*42));
+  motionSamples=[];
+  motionDistances=[0];
+
+  let total=0;
+  let prev=curvePath.getPoint(0);
+  motionSamples.push(prev.clone());
+
+  for(let i=1;i<=count;i++){
+    const p=curvePath.getPoint(i/count);
+    total+=p.distanceTo(prev);
+    motionSamples.push(p.clone());
+    motionDistances.push(total);
+    prev=p;
+  }
+
+  motionLength=Math.max(.001,total);
+}
+
+function sampleMotionByDistance(distance){
+  if(!motionSamples.length)return new THREE.Vector3();
+
+  const d=Math.max(0,Math.min(motionLength,distance));
+
+  let lo=0;
+  let hi=motionDistances.length-1;
+  while(lo<hi){
+    const mid=(lo+hi)>>1;
+    if(motionDistances[mid]<d)lo=mid+1;
+    else hi=mid;
+  }
+
+  const i=Math.max(1,lo);
+  const d0=motionDistances[i-1];
+  const d1=motionDistances[i];
+  const span=Math.max(.000001,d1-d0);
+  const t=(d-d0)/span;
+
+  return motionSamples[i-1].clone().lerp(motionSamples[i],t);
+}
+
+function sampleMotionTangentByDistance(distance){
+  const epsilon=Math.max(.02,motionLength*.0025);
+  const a=sampleMotionByDistance(Math.max(0,distance-epsilon));
+  const b=sampleMotionByDistance(Math.min(motionLength,distance+epsilon));
+  return b.sub(a).normalize();
+}
+
+function build3D(path){
+  clearWorld();
+
+  const base=new THREE.Mesh(
+    new THREE.BoxGeometry(COLS*1.45+.8,.5,ROWS*1.45+.8),
+    mat(0xdfe5eb,.82,0)
+  );
+  base.position.y=-.02;
+  base.receiveShadow=true;
+  world.add(base);
+
+  const underGlow=new THREE.Mesh(
+    new THREE.BoxGeometry(COLS*1.45+.35,.08,ROWS*1.45+.35),
+    new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xdce8ff,emissiveIntensity:.28,roughness:.5})
+  );
+  underGlow.position.y=.26;
+  world.add(underGlow);
+
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const blocked=BLOCKED.has(`${x},${y}`);
+    const tile=makeRoundedTile(blocked?0xc9d0d8:0xffffff);
+    tile.position.copy(p3(x,y));
+    tile.position.y=.39;
+    if(blocked) tile.material.roughness=.9;
+    world.add(tile);
+
+    if(blocked){
+      const cap=new THREE.Mesh(
+        new THREE.BoxGeometry(.82,.06,.82),
+        mat(0xb7bec8,.95)
+      );
+      cap.position.copy(tile.position);
+      cap.position.y=.52;
+      cap.rotation.y=Math.PI/4;
+      cap.castShadow=true;
+      world.add(cap);
+    }
+  }
+
+  const cellPts=path.map(q=>p3(q.x,q.y));
+
+  // Keep the rail out of the start and goal pads.
+  const startDir=new THREE.Vector3(
+    cellPts[1].x-cellPts[0].x,0,cellPts[1].z-cellPts[0].z
+  ).normalize();
+  const endDir=new THREE.Vector3(
+    cellPts[cellPts.length-1].x-cellPts[cellPts.length-2].x,
+    0,
+    cellPts[cellPts.length-1].z-cellPts[cellPts.length-2].z
+  ).normalize();
+
+  const pts=cellPts.map(p=>p.clone());
+  pts[0].add(startDir.clone().multiplyScalar(.62));
+  pts[pts.length-1].add(endDir.clone().multiplyScalar(-.68));
+
+  // Build straight segments with short rounded corners.
+  const pathCurve=new THREE.CurvePath();
+  const cornerRadius=.34;
+
+  for(let i=0;i<pts.length-1;i++){
+    const current=pts[i];
+    const next=pts[i+1];
+
+    if(i===0){
+      const end=pts.length>2
+        ? next.clone().add(next.clone().sub(current).normalize().multiplyScalar(-cornerRadius))
+        : next.clone();
+      pathCurve.add(new THREE.LineCurve3(current.clone(),end));
+      continue;
+    }
+
+    if(i===pts.length-2){
+      const start=current.clone().add(next.clone().sub(current).normalize().multiplyScalar(cornerRadius));
+      pathCurve.add(new THREE.LineCurve3(start,next.clone()));
+      continue;
+    }
+
+    const prev=pts[i-1];
+    const inDir=current.clone().sub(prev).normalize();
+    const outDir=next.clone().sub(current).normalize();
+
+    const cornerStart=current.clone().add(inDir.clone().multiplyScalar(-cornerRadius));
+    const cornerEnd=current.clone().add(outDir.clone().multiplyScalar(cornerRadius));
+
+    const previousCurve=pathCurve.curves[pathCurve.curves.length-1];
+    const previousEnd=previousCurve.getPoint(1);
+    if(previousEnd.distanceTo(cornerStart)>.001){
+      pathCurve.add(new THREE.LineCurve3(previousEnd.clone(),cornerStart.clone()));
+    }
+
+    pathCurve.add(new THREE.QuadraticBezierCurve3(
+      cornerStart.clone(),
+      current.clone(),
+      cornerEnd.clone()
+    ));
+  }
+
+  curve=pathCurve;
+
+  // The visible rail stays outside the colored pads, while the ball follows
+  // one continuous motion path from the center of the start to the center
+  // of the goal. This removes the visual jump at the destination.
+  motionCurve=new THREE.CurvePath();
+  motionCurve.add(new THREE.LineCurve3(cellPts[0].clone(),pts[0].clone()));
+  pathCurve.curves.forEach(segment=>motionCurve.add(segment));
+  motionCurve.add(new THREE.LineCurve3(
+    pts[pts.length-1].clone(),
+    cellPts[cellPts.length-1].clone()
+  ));
+  buildMotionSamples(motionCurve);
+  const unitsPerSecond=4.35;
+  motionDuration=motionLength/unitsPerSecond;
+
+  // soft support under rail
+  const support=new THREE.Mesh(
+    new THREE.TubeGeometry(curve,Math.max(110,path.length*28),.21,20,false),
+    mat(0x23272d,.42,.16)
+  );
+  support.position.y=.02;
+  support.castShadow=true;
+  support.receiveShadow=true;
+  world.add(support);
+
+  const rail=new THREE.Mesh(
+    new THREE.TubeGeometry(curve,Math.max(140,path.length*34),.13,22,false),
+    mat(0x3d424a,.27,.34)
+  );
+  rail.position.y=.08;
+  rail.castShadow=true;
+  world.add(rail);
+
+  // side highlights
+  const highlight=new THREE.Mesh(
+    new THREE.TubeGeometry(curve,Math.max(140,path.length*34),.04,14,false),
+    new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xffffff,emissiveIntensity:.16,roughness:.25})
+  );
+  highlight.position.y=.19;
+  world.add(highlight);
+
+  const startPad=new THREE.Mesh(new THREE.CylinderGeometry(.58,.68,.42,40),mat(0x4285f4,.38,.05));
+  startPad.position.copy(cellPts[0]);startPad.position.y=.35;startPad.castShadow=true;world.add(startPad);
+
+  const goalPad=new THREE.Mesh(new THREE.CylinderGeometry(.66,.76,.5,40),mat(0x34a853,.38,.05));
+  goalPad.position.copy(cellPts[cellPts.length-1]);goalPad.position.y=.39;goalPad.castShadow=true;world.add(goalPad);
+
+  const startRing=new THREE.Mesh(new THREE.TorusGeometry(.46,.07,12,40),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0x9fc2ff,emissiveIntensity:.75,roughness:.3}));
+  startRing.rotation.x=Math.PI/2;startRing.position.copy(cellPts[0]);startRing.position.y=.62;world.add(startRing);
+
+  const goalRing=new THREE.Mesh(new THREE.TorusGeometry(.53,.075,12,40),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0xa6f4bd,emissiveIntensity:.9,roughness:.3}));
+  goalRing.rotation.x=Math.PI/2;goalRing.position.copy(cellPts[cellPts.length-1]);goalRing.position.y=.68;world.add(goalRing);
+
+  const launchBridge=new THREE.Mesh(
+    new THREE.BoxGeometry(.7,.13,.24),
+    mat(0x3d424a,.28,.3)
+  );
+  launchBridge.position.copy(cellPts[0].clone().add(startDir.clone().multiplyScalar(.3)));
+  launchBridge.position.y=.57;
+  launchBridge.rotation.y=Math.atan2(startDir.x,startDir.z);
+  launchBridge.castShadow=true;
+  world.add(launchBridge);
+
+  const arrivalBridge=new THREE.Mesh(
+    new THREE.BoxGeometry(.72,.13,.24),
+    mat(0x3d424a,.28,.3)
+  );
+  arrivalBridge.position.copy(cellPts[cellPts.length-1].clone().add(endDir.clone().multiplyScalar(-.34)));
+  arrivalBridge.position.y=.57;
+  arrivalBridge.rotation.y=Math.atan2(endDir.x,endDir.z);
+  arrivalBridge.castShadow=true;
+  world.add(arrivalBridge);
+
+
+  ball=new THREE.Mesh(
+    new THREE.SphereGeometry(.31,40,40),
+    new THREE.MeshPhysicalMaterial({
+      color:0xea4335,roughness:.18,metalness:.03,clearcoat:1,clearcoatRoughness:.12
+    })
+  );
+  ball.castShadow=true;
+  ball.position.copy(sampleMotionByDistance(0));
+  ball.position.y+=.35;
+  smoothBallPosition.copy(ball.position);
+  world.add(ball);
+
+  const ballGlow=new THREE.PointLight(0xff705f,1.2,3.2,2);
+  ball.add(ballGlow);
+
+  world.rotation.set(0,0,0);
+  world.position.y=-.3;
+  world.scale.set(.94,.94,.94);
+}
+
+function beginTransition(path){
+  build3D(path);
+
+  document.getElementById('transitionFlash').classList.add('show');
+  setTimeout(()=>document.getElementById('transitionFlash').classList.remove('show'),420);
+
+  mount.classList.add('active');
+  document.getElementById('threeUI').classList.add('active');
+  document.getElementById('runStatus').textContent='Preparando rota…';
+  document.getElementById('success').classList.remove('show');
+  document.getElementById('nextStage').style.display='none';
+
+  transitionActive=true;
+  transitionT=0;
+  arrivalCompleted=false;
+  smoothTangent.set(0,0,1);
+
+  transitionStartCam.set(0,13.8,.01);
+  transitionEndCam.set(8.5,8.3,10.5);
+  transitionStartTarget.set(0,0,0);
+  transitionEndTarget.set(0,.45,0);
+  camera.position.copy(transitionStartCam);
+  currentLookTarget.copy(transitionStartTarget);
+
+  world.rotation.x=0;
+  world.rotation.y=0;
+  world.position.y=-.3;
+  world.scale.set(.82,.82,.82);
+
+  // editor fades while the real-time 3D board takes its place
+  requestAnimationFrame(()=>document.getElementById('editor').classList.add('hidden'));
+}
+
+function startRun(){
+  const v=validate();
+  if(!v.ok)return;
+  beginTransition(v.path);
+}
+
+runBtn.onclick=startRun;
+
+document.getElementById('replay').onclick=()=>{
+  runT=0;
+  arrivalCompleted=false;
+  smoothBallPosition.copy(sampleMotionByDistance(0));
+  smoothTangent.copy(sampleMotionTangentByDistance(.01));
+  running=true;
+  document.getElementById('success').classList.remove('show');
+  document.getElementById('runStatus').textContent='Testando rota…';
+  document.getElementById('nextStage').style.display='none';
+};
+
+document.getElementById('back').onclick=()=>{
+  running=false;
+  transitionActive=false;
+  mount.classList.remove('active');
+  document.getElementById('threeUI').classList.remove('active');
+  document.getElementById('editor').classList.remove('hidden');
+  document.getElementById('nextStage').style.display='none';
+};
+
+function celebrate(){
+  document.getElementById('success').classList.add('show');
+  document.getElementById('runStatus').textContent=currentStage===STAGES.length-1?'Experiência concluída!':'Solução correta!';
+  document.getElementById('nextStage').style.display=currentStage<STAGES.length-1?'inline-block':'none';
+
+  const end=curve.getPoint(1),colors=[0x4285f4,0xea4335,0xfbbc04,0x34a853];
+  for(let i=0;i<90;i++){
+    const c=new THREE.Mesh(new THREE.BoxGeometry(.07,.11,.035),mat(colors[i%4],.45,.05));
+    c.position.copy(end);
+    c.position.y+=.85;
+    c.userData={
+      v:new THREE.Vector3((Math.random()-.5)*.15,.09+Math.random()*.13,(Math.random()-.5)*.15),
+      life:0,
+      spin:new THREE.Vector3(Math.random()*.16,Math.random()*.16,Math.random()*.16)
+    };
+    world.add(c);confetti.push(c);
+  }
+}
+
+document.getElementById('nextStage').onclick=()=>{
+  if(currentStage>=STAGES.length-1)return;
+  running=false;
+  transitionActive=false;
+  mount.classList.remove('active');
+  document.getElementById('threeUI').classList.remove('active');
+  document.getElementById('editor').classList.remove('hidden');
+  document.getElementById('nextStage').style.display='none';
+  loadStage(currentStage+1);
+};
+
+const clock=new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(clock.getDelta(),.035);
+
+  if(transitionActive){
+    transitionT+=dt/1.6;
+    const t=Math.min(1,transitionT);
+    const e=easeInOutCubic(t);
+
+    camera.position.lerpVectors(transitionStartCam,transitionEndCam,e);
+    currentLookTarget.lerpVectors(transitionStartTarget,transitionEndTarget,e);
+    camera.lookAt(currentLookTarget);
+
+    world.rotation.x=THREE.MathUtils.lerp(0,-.06,e);
+    world.rotation.y=THREE.MathUtils.lerp(0,-.32,e);
+    world.scale.setScalar(THREE.MathUtils.lerp(.82,1,e));
+    world.position.y=THREE.MathUtils.lerp(-.3,0,e);
+
+    if(t>=1){
+      transitionActive=false;
+      runT=0;
+      arrivalCompleted=false;
+      smoothBallPosition.copy(sampleMotionByDistance(0));
+      smoothTangent.copy(sampleMotionTangentByDistance(.01));
+      running=true;
+      document.getElementById('runStatus').textContent='Testando rota…';
+    }
+  }
+
+  if(running&&motionCurve&&ball){
+    runT+=dt;
+
+    const raw=Math.min(1,runT/motionDuration);
+
+    // Constant physical speed for most of the path, with only a subtle
+    // deceleration in the final 8%. No convergence wait at the endpoint.
+    const easeStart=.92;
+    let progress=raw;
+    if(raw>easeStart){
+      const local=(raw-easeStart)/(1-easeStart);
+      const eased=1-Math.pow(1-local,1.28);
+      progress=easeStart+(1-easeStart)*eased;
+    }
+
+    const travelled=motionLength*progress;
+    const targetPosition=sampleMotionByDistance(travelled);
+    const targetTangent=sampleMotionTangentByDistance(travelled);
+
+    // Position follows the sampled path directly. Only tangent/camera are
+    // smoothed, which prevents visible stalls near straight segment joins.
+    smoothBallPosition.copy(targetPosition);
+    smoothTangent.lerp(targetTangent,1-Math.exp(-dt*18)).normalize();
+
+    ball.position.copy(targetPosition);
+    ball.position.y+=.35;
+
+    const finishBlend=smoothstep01((raw-easeStart)/(1-easeStart));
+    const rollSpeed=THREE.MathUtils.lerp(7.7,3.0,finishBlend);
+    ball.rotation.z-=dt*rollSpeed;
+    ball.rotation.x+=dt*rollSpeed*.45;
+
+    const follow=new THREE.Vector3(
+      8.5+smoothTangent.x*1.65,
+      8.2,
+      10.5+smoothTangent.z*1.65
+    );
+    camera.position.lerp(follow,1-Math.exp(-dt*2.45));
+
+    const look=targetPosition.clone();
+    look.y=.55;
+    currentLookTarget.lerp(look,1-Math.exp(-dt*3.25));
+    camera.lookAt(currentLookTarget);
+
+    if(raw>=1&&!arrivalCompleted){
+      arrivalCompleted=true;
+      running=false;
+
+      const finalPoint=sampleMotionByDistance(motionLength);
+      ball.position.copy(finalPoint);
+      ball.position.y+=.35;
+
+      celebrate();
+    }
+  }
+
+  confetti.forEach((c,i)=>{
+    c.userData.life+=dt;
+    c.position.add(c.userData.v);
+    c.userData.v.y-=.005;
+    c.rotation.x+=c.userData.spin.x;
+    c.rotation.y+=c.userData.spin.y;
+    c.rotation.z+=c.userData.spin.z;
+    if(c.userData.life>3.2){
+      world.remove(c);
+      confetti.splice(i,1);
+    }
+  });
+
+  renderer.render(scene,camera);
+}
+animate();
+
+addEventListener('resize',()=>{
+  fitBoardToViewport();
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+loadStage(0);
+</script>
+</body>
+</html>
